@@ -7,8 +7,9 @@ import annotator
 import manager
 from statistics import Statistics
 
+
 class Video:
-    def __init__(self, video_file: str, conf_threshold: float = 0.3, iou: float = 0.7):
+    def __init__(self, model: str, video_file: str, conf_threshold: float = 0.3, iou: float = 0.7):
         self.__conf = conf_threshold
         self.__iou = iou
         self.__stream = cv2.VideoCapture(video_file)
@@ -18,8 +19,8 @@ class Video:
         self.__click = 0
         self.__polygon = np.zeros([4, 2], dtype=int)
 
-        cuda = "cuda" if torch.cuda.is_available() else "cpu"
-        self.__model = YOLO("./models/yolov8x-visdrone.pt").to(cuda)
+        self.__cuda = "cuda" if torch.cuda.is_available() else "cpu"
+        self.__model = YOLO(model).to(self.__cuda)
         self.__tracker = sv.ByteTrack(
             track_buffer=self.__video_info.fps * 2,
             frame_rate=self.__video_info.fps,
@@ -75,6 +76,14 @@ class Video:
         render = self.__box_annotator.annotate(frame, self.__model, detections)
         render = self.__zone_annotator.annotate(render)
         render = self.__breadcrumbs.annotate(render, detections)
+        render = sv.draw_text(
+            render,
+            f"Device: {self.__cuda}",
+            sv.Point(100, 10),
+            sv.Color.red(),
+            1,
+            2
+        )
 
         return render
 
