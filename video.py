@@ -8,6 +8,7 @@ import manager
 from statistics import Statistics  # type: ignore
 
 from Yolov8n import Yolov8n
+import time
 
 
 class Video:
@@ -65,15 +66,17 @@ class Video:
         )
 
         pbar = tqdm(total=self.__video_info.total_frames, ncols=100)
-
+        times = []
         while self.__stream.isOpened():
             pbar.update(1)
 
             ret, frame = self.__stream.read()
             if not ret:
                 break
-
+            timer = time.perf_counter()
             detections = self.__detect(frame)
+            times.append(time.perf_counter() - timer)
+
             self.__render = self.__annotate(frame, detections)
             self.__stats.update(detections)
 
@@ -82,6 +85,11 @@ class Video:
         self.__stats.save()
         self.__stream.release()
         writer.release()
+        pbar.close()
+        print()
+        print(f"Average FPS: {len(times) / sum(times):.2f}")
+        print(f"Average Latency: {np.mean(times) * 1000:.2f} ms")
+
         # cv2.destroyAllWindows()
 
     def old_preocess(self):
