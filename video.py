@@ -64,7 +64,7 @@ class Video:
             (self.__video_info.width, self.__video_info.height),
         )
 
-        pbar = tqdm(total=self.__video_info.total_frames, width=100)
+        pbar = tqdm(total=self.__video_info.total_frames, ncols=100)
 
         while self.__stream.isOpened():
             pbar.update(1)
