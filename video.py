@@ -9,7 +9,9 @@ from statistics import Statistics
 
 
 class Video:
-    def __init__(self, model: str, video_file: str, conf_threshold: float = 0.3, iou: float = 0.7):
+    def __init__(
+        self, model: str, video_file: str, conf_threshold: float = 0.3, iou: float = 0.7
+    ):
         self.__conf = conf_threshold
         self.__iou = iou
         self.__stream = cv2.VideoCapture(video_file)
@@ -32,7 +34,7 @@ class Video:
             color=sv.ColorPalette.default(),
             position=sv.Position.CENTER,
             trace_length=100,
-            thickness=2
+            thickness=2,
         )
         self.__stats = Statistics(self.__model.names, self.__zones_manager)
 
@@ -50,8 +52,9 @@ class Video:
                 cv2.imshow("Traffic Analysis", param.__render)
 
     def process(self):
-        cv2.namedWindow("Traffic Analysis", cv2.WINDOW_GUI_NORMAL)
-        cv2.setMouseCallback("Traffic Analysis", self.__mouse_callback, self)
+        # cv2.namedWindow("Traffic Analysis", cv2.WINDOW_GUI_NORMAL)
+        # cv2.setMouseCallback("Traffic Analysis", self.__mouse_callback, self)
+
         while self.__stream.isOpened():
             if not self.__paused:
                 ret, frame = self.__stream.read()
@@ -59,30 +62,24 @@ class Video:
                     detections = self.__detect(frame)
                     self.__render = self.__annotate(frame, detections)
                     self.__stats.update(detections)
-                    cv2.imshow("Traffic Analysis", self.__render)
-
-            key_press = cv2.waitKey(1) & 0xFF
-            if key_press == ord('q'):
-                self.__stats.save()
-                break
-            if key_press == ord('p'):
-                self.__paused = not self.__paused
+                    # cv2.imshow("Traffic Analysis", self.__render)
+            # key_press = cv2.waitKey(1) & 0xFF
+            # if key_press == ord('q'):
+            #     self.__stats.save()
+            #     break
+            # if key_press == ord('p'):
+            #     self.__paused = not self.__paused
 
         self.__stats.save()
         self.__stream.release()
-        cv2.destroyAllWindows()
+        # cv2.destroyAllWindows()
 
     def __annotate(self, frame: np.ndarray, detections: sv.Detections) -> np.ndarray:
         render = self.__box_annotator.annotate(frame, self.__model, detections)
         render = self.__zone_annotator.annotate(render)
         render = self.__breadcrumbs.annotate(render, detections)
         render = sv.draw_text(
-            render,
-            f"Device: {self.__cuda}",
-            sv.Point(100, 10),
-            sv.Color.red(),
-            1,
-            2
+            render, f"Device: {self.__cuda}", sv.Point(100, 10), sv.Color.red(), 1, 2
         )
 
         return render
@@ -93,14 +90,24 @@ class Video:
             conf=self.__conf,
             iou=self.__iou,
             classes=[2, 3, 4, 5, 6, 7, 8, 9],
-            verbose=False,
-            imgsz=640
+            verbose=True,
+            imgsz=640,
         )[0]
+
+        print(type(result))
+        print(result)
+
+        import sys
+
+        sys.exit(1)
+
         detections = sv.Detections.from_ultralytics(result)
         detections = self.__tracker.update_with_detections(detections)
         input_detections = list()
         output_detections = list()
-        for polygon in self.__zones_manager.input_zones + self.__zones_manager.output_zones:
+        for polygon in (
+            self.__zones_manager.input_zones + self.__zones_manager.output_zones
+        ):
             result = detections[polygon.zone.trigger(detections=detections)]
             zone_type = output_detections if polygon.is_output else input_detections
             zone_type.append(result)
