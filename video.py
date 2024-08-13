@@ -55,8 +55,38 @@ class Video:
                 cv2.imshow("Traffic Analysis", param.__render)
 
     def process(self):
-        # cv2.namedWindow("Traffic Analysis", cv2.WINDOW_GUI_NORMAL)
-        # cv2.setMouseCallback("Traffic Analysis", self.__mouse_callback, self)
+        from tqdm import tqdm
+
+        writer = cv2.VideoWriter(
+            "output/output.mp4",
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            self.__video_info.fps,
+            (self.__video_info.width, self.__video_info.height),
+        )
+
+        pbar = tqdm(total=self.__video_info.total_frames, width=100)
+
+        while self.__stream.isOpened():
+            pbar.update(1)
+
+            ret, frame = self.__stream.read()
+            if not ret:
+                break
+
+            detections = self.__detect(frame)
+            self.__render = self.__annotate(frame, detections)
+            self.__stats.update(detections)
+
+            writer.write(self.__render)
+
+        self.__stats.save()
+        self.__stream.release()
+        writer.release()
+        # cv2.destroyAllWindows()
+
+    def old_preocess(self):
+        cv2.namedWindow("Traffic Analysis", cv2.WINDOW_GUI_NORMAL)
+        cv2.setMouseCallback("Traffic Analysis", self.__mouse_callback, self)
 
         while self.__stream.isOpened():
             if not self.__paused:
@@ -69,13 +99,13 @@ class Video:
 
                     cv2.imwrite("render.jpg", self.__render)
 
-                    # cv2.imshow("Traffic Analysis", self.__render)
-            # key_press = cv2.waitKey(1) & 0xFF
-            # if key_press == ord('q'):
-            #     self.__stats.save()
-            #     break
-            # if key_press == ord('p'):
-            #     self.__paused = not self.__paused
+                    cv2.imshow("Traffic Analysis", self.__render)
+            key_press = cv2.waitKey(1) & 0xFF
+            if key_press == ord("q"):
+                self.__stats.save()
+                break
+            if key_press == ord("p"):
+                self.__paused = not self.__paused
 
         self.__stats.save()
         self.__stream.release()
