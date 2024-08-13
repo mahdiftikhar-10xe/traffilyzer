@@ -5,7 +5,9 @@ import torch
 import numpy as np
 import annotator
 import manager
-from statistics import Statistics
+from statistics import Statistics  # type: ignore
+
+from Yolov8n import Yolov8n
 
 
 class Video:
@@ -23,6 +25,7 @@ class Video:
 
         self.__cuda = "cuda" if torch.cuda.is_available() else "cpu"
         self.__model = YOLO(model).to(self.__cuda)
+        self.custom_model = Yolov8n("yolov8n.onnx")
         self.__tracker = sv.ByteTrack(
             track_buffer=self.__video_info.fps * 2,
             frame_rate=self.__video_info.fps,
@@ -58,10 +61,14 @@ class Video:
         while self.__stream.isOpened():
             if not self.__paused:
                 ret, frame = self.__stream.read()
+                cv2.imwrite("test.jpg", frame)
                 if ret:
                     detections = self.__detect(frame)
                     self.__render = self.__annotate(frame, detections)
                     self.__stats.update(detections)
+
+                    cv2.imwrite("render.jpg", self.__render)
+
                     # cv2.imshow("Traffic Analysis", self.__render)
             # key_press = cv2.waitKey(1) & 0xFF
             # if key_press == ord('q'):
@@ -85,23 +92,28 @@ class Video:
         return render
 
     def __detect(self, frame: np.ndarray) -> sv.Detections:
-        result = self.__model(
-            frame,
-            conf=self.__conf,
-            iou=self.__iou,
-            classes=[2, 3, 4, 5, 6, 7, 8, 9],
-            verbose=True,
-            imgsz=640,
-        )[0]
+        # result = self.__model(
+        #     frame,
+        #     conf=self.__conf,
+        #     iou=self.__iou,
+        #     classes=[2, 3, 4, 5, 6, 7, 8, 9],
+        #     verbose=True,
+        #     imgsz=640,
+        # )[0]
 
-        print(type(result))
-        print(result)
+        result = self.custom_model(frame)
+        xyxy, conf, class_id = result
+        xyxy = xyxy.astype(int)
+        class_id = class_id.reshape((-1))
+        detections = sv.Detections(xyxy=xyxy, confidence=conf, class_id=class_id)
 
-        import sys
+        # # print(detections)
 
-        sys.exit(1)
+        # import sys
 
-        detections = sv.Detections.from_ultralytics(result)
+        # sys.exit(1)
+
+        # detections = sv.Detections.from_ultralytics(result)
         detections = self.__tracker.update_with_detections(detections)
         input_detections = list()
         output_detections = list()
