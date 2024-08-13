@@ -1,8 +1,17 @@
 from ultralyticsplus import YOLO
+from onnx.utils import extract_model
 
 # load model
-model = YOLO("mshamrai/yolov8n-visdrone")
-model.export(format="onnx", opset=11)
+# model = YOLO("mshamrai/yolov8n-visdrone")
+# model.export(format="onnx", opset=11)
+
+# create postprocessing graph
+onodes = ["/model.22/dfl/conv/Conv_output_0", "/model.22/Sigmoid_output_0"]
+model_path = "yolov8n.onnx"
+extract_model(
+    model_path, "extracted.onnx", input_names=onodes, output_names=["output0"]
+)
+
 # # set model parameters
 # model.overrides["conf"] = 0.25  # NMS confidence threshold
 # model.overrides["iou"] = 0.45  # NMS IoU threshold

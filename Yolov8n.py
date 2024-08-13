@@ -1,6 +1,8 @@
 import numpy as np
 import onnxruntime as ort
 import cv2
+from dvapi.infer_session import HardwareSession, quantize, dequantize
+
 
 from supervision.detection.core import Detections
 
@@ -8,11 +10,16 @@ np.set_printoptions(suppress=True)
 
 
 class Yolov8n:
-    def __init__(self, model_path) -> None:
+    def __init__(self, model_path, extracted_path="extracted.onnx") -> None:
+        self.session = HardwareSession(model_path)
+        self.session.start()
 
-        self.session = ort.InferenceSession(model_path)
-        self.input_name = self.session.get_inputs()[0].name
-        self.input_shape = self.session.get_inputs()[0].shape
+        self.extracted_session = ort.InferenceSession(extracted_path)
+        self.out_sizes = [x.shape for x in self.extracted_session.get_inputs()[::-1]]
+        self.out_names = [x.name for x in self.extracted_session.get_inputs()[::-1]]
+
+        # self.input_name = self.session.get_inputs()[0].name
+        self.input_shape = [1, 3, 640, 640]
 
     def preprocess(self, image: np.ndarray) -> np.ndarray:
         h, w = self.input_shape[2:]
@@ -35,8 +42,8 @@ class Yolov8n:
         )
 
         image = padded_image.transpose(2, 0, 1)
-        image = image / 255
-        image = image.astype(np.float32)
+        # image = image / 255
+        image = image.astype(np.int8)
         image = np.expand_dims(image, axis=0)
         return image
 
@@ -218,9 +225,48 @@ class Yolov8n:
 
         return boxes
 
-    def __forward(self, input: np.ndarray) -> np.ndarray:
-        preprocessed = self.preprocess(input)
-        result = self.session.run(None, {self.input_name: preprocessed})[0]
+    def infer(self, input: np.ndarray) -> list:
+        result = self.session.run_sync(input)
+        return result
+
+    def postprocess(
+        self, raw_output: list[np.ndarray], input_shape: tuple
+    ) -> list[np.ndarray]:
+        outputs = [x.reshape(self.out_sizes[i]) for i, x in enumerate(raw_output)]
+
+        result = self.extracted_session.run(
+            None,
+            {name: output for name, output in zip(self.out_names, outputs)},
+        )[0]
+
+        # result = self.session.run(None, {self.input_name: preprocessed})[0]
+        result = self.non_max_suppression(result)[0]
+
+        boxes = result[:, :4]
+        scores = result[:, 4]
+        classes = result[:, 5:]
+
+        boxes = self.scale_coords(boxes, input_shape)
+
+        return [boxes, scores, classes]
+
+    def __forward(self, input_array: np.ndarray) -> np.ndarray:
+        preprocessed = self.preprocess(input_array)
+
+        quantized_image = quantize(preprocessed, self.session.get_model_input_params())
+
+        result = self.session.run_sync([quantized_image])
+        dequantized_outputs = dequantize(result)
+        dequantized_outputs = [
+            x.reshape(self.out_sizes[i]) for i, x in enumerate(dequantized_outputs)
+        ]
+
+        result = self.extracted_session.run(
+            None,
+            {name: output for name, output in zip(self.out_names, dequantized_outputs)},
+        )[0]
+
+        # result = self.session.run(None, {self.input_name: preprocessed})[0]
         result = self.non_max_suppression(result)[0]
 
         boxes = result[:, :4]
@@ -236,7 +282,7 @@ class Yolov8n:
 
 
 if __name__ == "__main__":
-    model = Yolov8n("yolov8n.onnx")
+    model = Yolov8n("model.dvm")
     image = cv2.imread("test.jpg")
-    xyxy, conf, class_id = model(image)
-    print(xyxy)
+    boxes, scores, classes = model(image)
+    print(boxes, scores, classes)
