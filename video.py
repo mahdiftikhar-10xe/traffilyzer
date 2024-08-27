@@ -16,6 +16,7 @@ class Video:
         self, model: str, video_file: str, conf_threshold: float = 0.3, iou: float = 0.7
     ):
         self.__conf = conf_threshold
+        self.__times = {}
         self.__iou = iou
         self.__stream = cv2.VideoCapture(video_file)
         self.__video_info = sv.VideoInfo.from_video_path(video_file)
@@ -87,8 +88,27 @@ class Video:
         writer.release()
         pbar.close()
         print()
-        print(f"Average FPS: {len(times) / sum(times):.2f}")
-        print(f"Average Latency: {np.mean(times) * 1000:.2f} ms")
+        print()
+        print(f"Average inference time: {np.mean(times) * 1000:.2f}ms")
+        print(f"Average FPS: {self.__video_info.total_frames / np.sum(times):.2f}")
+        print(
+            f"\t{'Average preprocess latency:':<40} {np.mean(self.__times['preprocess']) * 1000:.2f} ms"
+        )
+        # print(
+        #     f"\t{'Average quantize latency:':<40} {np.mean(self.__times['quantize']) * 1000:.2f} ms"
+        # )
+        print(
+            f"\t{'Average inference latency:':<40} {np.mean(self.__times['inference']) * 1000:.2f} ms"
+        )
+        # print(
+        #     f"\t{'Average dequantize latency:':<40} {np.mean(self.__times['dequantize']) * 1000:.2f} ms"
+        # )
+        print(
+            f"\t{'Average postprocess latency:':<40} {np.mean(self.__times['postprocess']) * 1000:.2f} ms"
+        )
+        print(
+            f"\t{'Average tracking latency:':<40} {np.mean(self.__times['tracking']) * 1000:.2f} ms"
+        )
 
         # cv2.destroyAllWindows()
 
@@ -139,7 +159,27 @@ class Video:
         #     imgsz=640,
         # )[0]
 
-        result = self.custom_model(frame)
+        preprocess_times = self.__times.get("preprocess", [])
+        inference_times = self.__times.get("inference", [])
+        postprocess_times = self.__times.get("postprocess", [])
+        # quantize_times = self.__times.get("quantize", [])
+        dequantize_times = self.__times.get("dequantize", [])
+        tracking_times = self.__times.get("tracking", [])
+
+        timer = time.perf_counter()
+        quantized = self.custom_model.preprocess(frame)
+        preprocess_times.append(time.perf_counter() - timer)
+
+        timer = time.perf_counter()
+        result = self.custom_model(quantized)
+        inference_times.append(time.perf_counter() - timer)
+
+        timer = time.perf_counter()
+
+        result = self.custom_model.postprocess(result, frame)
+        postprocess_times.append(time.perf_counter() - timer)
+
+        timer = time.perf_counter()
         xyxy, conf, class_id = result
         xyxy = xyxy.astype(int)
         class_id = class_id.reshape((-1))
@@ -161,6 +201,16 @@ class Video:
             result = detections[polygon.zone.trigger(detections=detections)]
             zone_type = output_detections if polygon.is_output else input_detections
             zone_type.append(result)
+
+        tracking_times.append(time.perf_counter() - timer)
+        self.__times = {
+            "preprocess": preprocess_times,
+            "inference": inference_times,
+            "postprocess": postprocess_times,
+            # "quantize": quantize_times,
+            "dequantize": dequantize_times,
+            "tracking": tracking_times,
+        }
 
         self.__zones_manager.update(input_detections, output_detections)
         return detections

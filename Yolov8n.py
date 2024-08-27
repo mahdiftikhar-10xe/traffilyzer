@@ -218,18 +218,20 @@ class Yolov8n:
 
         return boxes
 
-    def __forward(self, input: np.ndarray) -> np.ndarray:
-        preprocessed = self.preprocess(input)
-        result = self.session.run(None, {self.input_name: preprocessed})[0]
+    def postprocess(self, result, frame):
         result = self.non_max_suppression(result)[0]
 
         boxes = result[:, :4]
         scores = result[:, 4]
         classes = result[:, 5:]
 
-        boxes = self.scale_coords(boxes, input.shape)
+        boxes = self.scale_coords(boxes, frame.shape)
 
         return [boxes, scores, classes]
+
+    def __forward(self, input: np.ndarray) -> np.ndarray:
+        result = self.session.run(None, {self.input_name: input})[0]
+        return result
 
     def __call__(self, input: np.ndarray) -> np.ndarray:
         return self.__forward(input)
