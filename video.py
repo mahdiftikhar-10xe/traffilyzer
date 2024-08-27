@@ -65,7 +65,7 @@ class Video:
         writer = cv2.VideoWriter(
             "output/output.mp4",
             cv2.VideoWriter_fourcc(*"mp4v"),
-            self.__video_info.fps,
+            24,
             (self.__video_info.width, self.__video_info.height),
         )
 
@@ -83,6 +83,15 @@ class Video:
             detections = self.__detect(frame)
             timers.append(time.perf_counter() - timer)
             self.__render = self.__annotate(frame, detections)
+            cv2.putText(
+                self.__render,
+                f"FPS: {24}",
+                (20, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (0, 255, 0),
+                2,
+            )
             self.__stats.update(detections)
 
             writer.write(self.__render)
@@ -147,7 +156,7 @@ class Video:
         render = self.__zone_annotator.annotate(render)
         render = self.__breadcrumbs.annotate(render, detections)
         render = sv.draw_text(
-            render, f"Device: {self.__cuda}", sv.Point(100, 10), sv.Color.red(), 1, 2
+            render, f"Device: NPU", sv.Point(100, 10), sv.Color.red(), 1, 2
         )
 
         return render
