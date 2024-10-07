@@ -53,3 +53,4 @@ ultralytics==8.0.231
 urllib3==2.1.0
 XlsxWriter==3.1.9
 onnxruntime==1.18.1
+gstreamer-python @ git+https://github.com/jackersson/gstreamer-python.git#egg=gstreamer-python
